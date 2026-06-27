@@ -1,4 +1,4 @@
-# University Permission & Communication Portal 🎓
+# Student Permission & Communication Management System 🎓
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![React](https://img.shields.io/badge/React-18-blue)

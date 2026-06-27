@@ -10,7 +10,7 @@
 
 ## 📖 Overview
 
-The **University Permission & Communication Portal** is a comprehensive, full-stack web application designed to digitize and automate the entire lifecycle of student permissions and university-wide communications. 
+The **Student Leave & Permission Management System** is a comprehensive, full-stack web application designed to digitize and automate the entire lifecycle of student permissions and university-wide communications. 
 
 Traditionally, university administrative processes—such as leave approvals, hostel outpasses, and institutional announcements—are handled via paper forms or fragmented email chains, leading to delays and lack of transparency. This portal solves these issues by providing a structured, auditable, and real-time operational platform for Students, Faculty, HODs, Wardens, and Administrators.
 
@@ -96,8 +96,5 @@ This project aligns with the United Nations Sustainable Development Goals (SDGs)
 - Live users receive instant updates via **WebSockets**.
 - Offline users receive personalized HTML emails with embedded file attachments.
 
-## 🤝 Contributing
-Contributions are welcome! If you'd like to improve the system or add new features (e.g., Mobile App integration, SSO), please open an issue or submit a pull request.
 
-## 📝 License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+

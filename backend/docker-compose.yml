@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # 1. The Message Broker (Optional now if you are using Redis for Celery, but good to keep)
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  # 2. The Cache & Celery Broker
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  # 3. The FastAPI Web Server
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    depends_on:
+      - rabbitmq
+      - redis
+    volumes:
+      - .:/app  
+    env_file:
+      - .env  # <--- NEW: Tells Docker to load your passwords
+
+  # 4. The Celery Background Worker
+  celery_worker:
+    build: .
+    command: celery -A app.core.celery_app worker --loglevel=info
+    depends_on:
+      - rabbitmq
+      - redis
+      - api
+    volumes:
+      - .:/app
+    env_file:
+      - .env  # <--- NEW: Tells Celery to load the email passwords

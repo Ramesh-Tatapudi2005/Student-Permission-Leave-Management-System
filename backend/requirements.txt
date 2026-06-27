@@ -1,0 +1,26 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+
+# Database & ORM
+sqlalchemy
+psycopg2-binary
+asyncpg
+
+# Security & Authentication
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+
+# Environment & Utilities
+python-dotenv
+pydantic[email]
+
+# Background Tasks (RabbitMQ/Celery/Redis)
+celery
+pika
+fastapi-limiter==0.1.6
+redis>=4.5.0
+fpdf
+supabase
+pandas

@@ -63,7 +63,7 @@ class AdminService:
         if db.query(AuthUser).filter(AuthUser.user_identifier == user_id).first():
             raise HTTPException(status_code=400, detail=f"Identifier {user_id} is already provisioned.")
             
-        default_password = "Adity@123"
+        default_password = "Aditya@123"
         new_auth = AuthUser(
             user_identifier=user_id, 
             password=get_password_hash(default_password), 

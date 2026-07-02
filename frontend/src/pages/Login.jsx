@@ -212,12 +212,11 @@ export default function AuthPage() {
   };
 
   return (
-    <div style={{ minHeight:"100vh", display:"flex", fontFamily:"'Inter','Segoe UI',sans-serif", background:"#f1f5f9" }}>
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-100" style={{ fontFamily:"'Inter','Segoe UI',sans-serif" }}>
 
       {/* ── LEFT PANEL — Navy blue ── */}
-      <div style={{
-        flex:"0 0 42%", display:"flex", flexDirection:"column", justifyContent:"center",
-        alignItems:"center", padding:"48px 40px", position:"relative", overflow:"hidden",
+      <div className="hidden md:flex w-full md:w-[42%] flex-col justify-center items-center relative overflow-hidden" style={{
+        padding:"48px 40px",
         background:"linear-gradient(160deg, #0c3669 0%, #0a2a52 60%, #081e3d 100%)",
       }}>
         {/* Subtle pattern overlay */}
@@ -225,7 +224,7 @@ export default function AuthPage() {
         <div style={{ position:"relative", zIndex:1, width:"100%", maxWidth:"340px" }}>
 
           {/* Logo + Name side by side */}
-          <div style={{ display:"flex", alignItems:"center", gap:"22px", marginBottom:"48px" }}>
+          <div className="animate-slide-up" style={{ display:"flex", alignItems:"center", gap:"22px", marginBottom:"48px" }}>
             <img
               src={logoImage} alt="Aditya University"
               style={{ height:"108px", width:"108px", objectFit:"contain", flexShrink:0,
@@ -245,7 +244,7 @@ export default function AuthPage() {
             { icon:<Users size={18}/>, title:"Faculty Dashboard", desc:"Review applications via one-click email approval links" },
             { icon:<Shield size={18}/>, title:"HOD Final Review", desc:"Multi-level approval with JWT-protected magic links" },
           ].map((f,i) => (
-            <div key={i} style={{ display:"flex", gap:"14px", alignItems:"flex-start", padding:"14px 16px", marginBottom:"10px", background:"rgba(255,255,255,0.06)", borderRadius:"10px", border:"1px solid rgba(255,255,255,0.1)" }}>
+            <div key={i} className={`animate-slide-up delay-${(i + 1) * 100}`} style={{ display:"flex", gap:"14px", alignItems:"flex-start", padding:"14px 16px", marginBottom:"10px", background:"rgba(255,255,255,0.06)", borderRadius:"10px", border:"1px solid rgba(255,255,255,0.1)" }}>
               <div style={{ color:"#f58220", flexShrink:0, marginTop:"2px" }}>{f.icon}</div>
               <div>
                 <p style={{ margin:0, fontSize:"13px", fontWeight:700, color:"#f1f5f9" }}>{f.title}</p>
@@ -254,16 +253,30 @@ export default function AuthPage() {
             </div>
           ))}
 
-          <p style={{ marginTop:"28px", fontSize:"12px", color:"rgba(255,255,255,0.25)", fontStyle:"italic", textAlign:"center" }}>
+          <p className="animate-slide-up delay-400" style={{ marginTop:"28px", fontSize:"12px", color:"rgba(255,255,255,0.25)", fontStyle:"italic", textAlign:"center" }}>
             "Education is the most powerful weapon which you can use to change the world."
           </p>
         </div>
       </div>
 
       {/* ── RIGHT PANEL — White ── */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", padding:"40px 32px", background:"#ffffff", overflowY:"auto" }}>
+      <div className="flex-1 w-full flex flex-col justify-center items-center bg-white overflow-y-auto p-6 md:p-10">
 
-        <div style={{ width:"100%", maxWidth:"400px" }}>
+        <div className="w-full max-w-[400px]">
+
+          {/* Mobile Logo */}
+          <div className="md:hidden flex items-center justify-center gap-4 mb-6 animate-slide-up">
+            <img
+              src={logoImage} alt="Aditya University"
+              style={{ height:"60px", width:"60px", objectFit:"contain", flexShrink:0,
+                filter:"drop-shadow(0 4px 12px rgba(0,0,0,0.15))",
+                borderRadius:"50%", background:"#fff", padding:"4px", boxSizing:"border-box" }}
+            />
+            <div>
+              <h1 style={{ fontSize:"26px", fontWeight:900, color:"#0c3669", letterSpacing:"0.05em", margin:"0 0 2px", lineHeight:1 }}>ADITYA</h1>
+              <p style={{ fontSize:"11px", fontWeight:800, color:"#f58220", letterSpacing:"0.4em", margin:0 }}>UNIVERSITY</p>
+            </div>
+          </div>
 
           {/* Alerts */}
           {success && (
@@ -280,11 +293,11 @@ export default function AuthPage() {
           {/* ════ LOGIN ════ */}
           {mode === "login" && (
             <>
-              <h2 style={{ margin:"0 0 4px", fontSize:"26px", fontWeight:800, color:"#0c3669" }}>Welcome Back</h2>
-              <p style={{ margin:"0 0 24px", fontSize:"13px", color:"#94a3b8" }}>Sign in to your Aditya University portal</p>
+              <h2 className="animate-slide-up" style={{ margin:"0 0 4px", fontSize:"26px", fontWeight:800, color:"#0c3669" }}>Welcome Back</h2>
+              <p className="animate-slide-up delay-100" style={{ margin:"0 0 24px", fontSize:"13px", color:"#94a3b8" }}>Sign in to your Aditya University portal</p>
 
               {/* Student / Staff tabs */}
-              <div style={{ display:"flex", borderBottom:"2px solid #e2e8f0", marginBottom:"20px" }}>
+              <div className="animate-slide-up delay-200" style={{ display:"flex", borderBottom:"2px solid #e2e8f0", marginBottom:"20px" }}>
                 <button type="button" style={tabBtn(!isFaculty)} onClick={() => { setIsFaculty(false); setLoginErr({}); setLoginId(""); setLoginPwd(""); }}>
                   <GraduationCap size={13}/> Student
                 </button>
@@ -293,7 +306,7 @@ export default function AuthPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleLogin} noValidate>
+              <form onSubmit={handleLogin} noValidate className="animate-slide-up delay-300">
                 <TextInput
                   label={isFaculty ? "Employee ID" : "Roll Number"}
                   placeholder={isFaculty ? "e.g., EMP1001" : "e.g., 23CS101"}
@@ -315,8 +328,8 @@ export default function AuthPage() {
                 </button>
               </form>
 
-              <div style={{ height:"1px", background:"#f1f5f9", margin:"24px 0" }}/>
-              <p style={{ textAlign:"center", fontSize:"13px", color:"#94a3b8", margin:0 }}>
+              <div className="animate-slide-up delay-400" style={{ height:"1px", background:"#f1f5f9", margin:"24px 0" }}/>
+              <p className="animate-slide-up delay-500" style={{ textAlign:"center", fontSize:"13px", color:"#94a3b8", margin:0 }}>
                 New here?{" "}
                 <span style={{ color:"#f58220", fontWeight:700, cursor:"pointer" }} onClick={() => switchMode("register-student")}>Student</span>
                 {" "}or{" "}
@@ -329,9 +342,9 @@ export default function AuthPage() {
           {/* ════ STUDENT REGISTER ════ */}
           {mode === "register-student" && (
             <>
-              <h2 style={{ margin:"0 0 4px", fontSize:"26px", fontWeight:800, color:"#0c3669" }}>Student Registration</h2>
-              <p style={{ margin:"0 0 24px", fontSize:"13px", color:"#94a3b8" }}>Your roll number must exist in the college database.</p>
-              <form onSubmit={handleRegStudent} noValidate>
+              <h2 className="animate-slide-up" style={{ margin:"0 0 4px", fontSize:"26px", fontWeight:800, color:"#0c3669" }}>Student Registration</h2>
+              <p className="animate-slide-up delay-100" style={{ margin:"0 0 24px", fontSize:"13px", color:"#94a3b8" }}>Your roll number must exist in the college database.</p>
+              <form onSubmit={handleRegStudent} noValidate className="animate-slide-up delay-200">
                 <TextInput label="Roll Number" placeholder="e.g., 23CS101"
                   value={sRoll} onChange={e => { setSRoll(e.target.value.toUpperCase()); if(sErr.roll_no) setSErr(p=>({...p,roll_no:""})); }}
                   error={sErr.roll_no} hint="4-20 alphanumeric characters" maxLength={20} autoComplete="username"/>
@@ -348,8 +361,8 @@ export default function AuthPage() {
                   {loading ? <Loader2 size={17} className="animate-spin"/> : "Create Student Account"}
                 </button>
               </form>
-              <div style={{ height:"1px", background:"#f1f5f9", margin:"24px 0" }}/>
-              <p style={{ textAlign:"center", fontSize:"13px", color:"#94a3b8", margin:0 }}>
+              <div className="animate-slide-up delay-300" style={{ height:"1px", background:"#f1f5f9", margin:"24px 0" }}/>
+              <p className="animate-slide-up delay-400" style={{ textAlign:"center", fontSize:"13px", color:"#94a3b8", margin:0 }}>
                 Already registered?{" "}
                 <span style={{ color:"#0c3669", fontWeight:700, cursor:"pointer" }} onClick={() => switchMode("login")}>Sign in here</span>
               </p>
@@ -359,9 +372,9 @@ export default function AuthPage() {
           {/* ════ FACULTY REGISTER ════ */}
           {mode === "register-faculty" && (
             <>
-              <h2 style={{ margin:"0 0 4px", fontSize:"26px", fontWeight:800, color:"#0c3669" }}>Faculty Registration</h2>
-              <p style={{ margin:"0 0 24px", fontSize:"13px", color:"#94a3b8" }}>Your Employee ID must exist in the college records.</p>
-              <form onSubmit={handleRegFaculty} noValidate>
+              <h2 className="animate-slide-up" style={{ margin:"0 0 4px", fontSize:"26px", fontWeight:800, color:"#0c3669" }}>Faculty Registration</h2>
+              <p className="animate-slide-up delay-100" style={{ margin:"0 0 24px", fontSize:"13px", color:"#94a3b8" }}>Your Employee ID must exist in the college records.</p>
+              <form onSubmit={handleRegFaculty} noValidate className="animate-slide-up delay-200">
                 <TextInput label="Employee ID" placeholder="e.g., EMP1001"
                   value={fEmp} onChange={e => { setFEmp(e.target.value.toUpperCase()); if(fErr.emp_id) setFErr(p=>({...p,emp_id:""})); }}
                   error={fErr.emp_id} hint="3-20 alphanumeric characters (hyphens allowed)" maxLength={20} autoComplete="username"/>
@@ -378,8 +391,8 @@ export default function AuthPage() {
                   {loading ? <Loader2 size={17} className="animate-spin"/> : "Create Faculty Account"}
                 </button>
               </form>
-              <div style={{ height:"1px", background:"#f1f5f9", margin:"24px 0" }}/>
-              <p style={{ textAlign:"center", fontSize:"13px", color:"#94a3b8", margin:0 }}>
+              <div className="animate-slide-up delay-300" style={{ height:"1px", background:"#f1f5f9", margin:"24px 0" }}/>
+              <p className="animate-slide-up delay-400" style={{ textAlign:"center", fontSize:"13px", color:"#94a3b8", margin:0 }}>
                 Already registered?{" "}
                 <span style={{ color:"#0c3669", fontWeight:700, cursor:"pointer" }} onClick={() => switchMode("login")}>Sign in here</span>
               </p>

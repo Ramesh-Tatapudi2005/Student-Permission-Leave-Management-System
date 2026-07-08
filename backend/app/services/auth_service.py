@@ -33,6 +33,12 @@ class AuthService:
         if not user or not verify_password(schema.password, user.password):
             raise HTTPException(status_code=401, detail="Invalid roll number or password")
 
+        if user.role != "STUDENT":
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied. This portal is for Students only. Please use the Staff / Admin login."
+            )
+
         user.last_login_at = datetime.datetime.utcnow()
         db.commit()
 

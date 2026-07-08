@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException,Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Request, UploadFile, File, Form
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.leave import LeaveApplySchema, LeaveActionSchema
 from app.services.leave_service import LeaveService
-from app.core.security import get_current_user # Your JWT decoder
+from app.core.security import get_current_user, decode_attachment_token  # JWT decoders
 # All email notifications are dispatched internally by LeaveService (leave_tasks workers)
 from app.models.leave import LeaveApplication
 from app.models.user import Student
@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fpdf import FPDF
 from datetime import date
 import os
+import uuid
 
 router = APIRouter(tags=["Leaves Dashboard"])
 
@@ -42,13 +43,125 @@ async def safe_rate_limiter(request: Request):
 
 # --- STUDENT ROUTES ---
 
-@router.post("/apply",dependencies=[Depends(safe_rate_limiter)])
-def apply_permission(
-    schema: LeaveApplySchema, 
+# Directory for storing parent's handwritten letter PDFs
+PARENT_LETTERS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "parent_letters")
+os.makedirs(PARENT_LETTERS_DIR, exist_ok=True)
+
+@router.post("/apply", dependencies=[Depends(safe_rate_limiter)])
+async def apply_permission(
+    leave_type: str = Form(...),
+    subject: str = Form(...),
+    description: str = Form(...),
+    from_date: str = Form(...),
+    to_date: str = Form(...),
+    parent_letter: UploadFile = File(...),
     db: Session = Depends(get_db), 
     current_user = Depends(get_current_user)
 ):
-    return LeaveService.apply_leave(db, current_user["sub"], schema)
+    # Validate the uploaded file
+    if parent_letter.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed for the parent's letter.")
+    
+    contents = await parent_letter.read()
+    if len(contents) > 5 * 1024 * 1024:  # 5 MB limit
+        raise HTTPException(status_code=400, detail="File size must not exceed 5 MB.")
+    
+    # Validate form fields using the existing Pydantic schema.
+    # NOTE: We catch ValidationError explicitly here because FastAPI only
+    # auto-handles it for *request-body* models, not manual instantiations.
+    try:
+        schema = LeaveApplySchema(
+            leave_type=leave_type,
+            subject=subject,
+            description=description,
+            from_date=from_date,
+            to_date=to_date
+        )
+    except ValidationError as exc:
+        # Extract the first meaningful error message from the Pydantic errors list
+        errors = exc.errors()
+        messages = []
+        for e in errors:
+            field = e["loc"][-1] if e.get("loc") else None
+            msg = e.get("msg", "Validation error")
+            # Strip pydantic's "Value error, " prefix if present
+            msg = msg.replace("Value error, ", "")
+            if field and field not in ("__root__", "__all__"):
+                field_label = {
+                    "leave_type": "Leave Type",
+                    "subject": "Subject",
+                    "description": "Description",
+                    "from_date": "Start Date",
+                    "to_date": "End Date",
+                }.get(str(field), str(field).replace("_", " ").title())
+                messages.append(f"{field_label}: {msg}")
+            else:
+                messages.append(msg)
+        raise HTTPException(status_code=400, detail=" | ".join(messages) if messages else "Invalid application data.")
+    
+    # Save the PDF file with a unique name
+    unique_filename = f"{current_user['sub']}_{uuid.uuid4().hex[:8]}_{parent_letter.filename}"
+    file_path = os.path.join(PARENT_LETTERS_DIR, unique_filename)
+    with open(file_path, "wb") as f:
+        f.write(contents)
+    
+    return LeaveService.apply_leave(db, current_user["sub"], schema, attachment_filename=unique_filename)
+
+
+@router.get("/attachment/view")
+def view_attachment_via_token(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """
+    PUBLIC endpoint — no Bearer token required.
+    Validates the short-lived attachment_token embedded in faculty emails
+    and streams the parent's handwritten letter PDF directly to the browser.
+    The token is purpose-scoped ('attachment_link') and expires in 3 days,
+    so it cannot be reused for any approval/rejection action.
+    """
+    payload = decode_attachment_token(token)  # raises 400 if invalid/expired
+    app_id = payload["app_id"]
+
+    app = db.query(LeaveApplication).filter(LeaveApplication.application_id == app_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    if not app.attachment_filename:
+        raise HTTPException(status_code=404, detail="No parent letter was attached to this application.")
+
+    file_path = os.path.join(PARENT_LETTERS_DIR, app.attachment_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+
+    return FileResponse(
+        path=file_path,
+        filename=f"Parent_Letter_APP_{app_id}.pdf",
+        media_type="application/pdf"
+    )
+
+
+@router.get("/{app_id}/attachment")
+def get_parent_letter_attachment(
+    app_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Serves the uploaded parent's handwritten letter PDF for viewing/downloading."""
+    app = db.query(LeaveApplication).filter(LeaveApplication.application_id == app_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if not app.attachment_filename:
+        raise HTTPException(status_code=404, detail="No parent letter attached to this application.")
+    
+    file_path = os.path.join(PARENT_LETTERS_DIR, app.attachment_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+    
+    return FileResponse(
+        path=file_path,
+        filename=f"Parent_Letter_APP_{app_id}.pdf",
+        media_type="application/pdf"
+    )
 
 @router.get("/student/history")
 def get_student_history(

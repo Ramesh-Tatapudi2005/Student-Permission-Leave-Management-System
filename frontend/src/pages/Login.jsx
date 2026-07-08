@@ -137,6 +137,17 @@ export default function AuthPage() {
       const token = res.data.access_token || res.data.token;
       const role  = res.data.role;
       if (!token) { setServerError("No access token returned."); return; }
+
+      // Role-portal mismatch guard (client-side defense-in-depth)
+      if (!isFaculty && role !== "STUDENT") {
+        setServerError("Access denied. This portal is for Students only. Please use the Staff / Admin tab.");
+        return;
+      }
+      if (isFaculty && role === "STUDENT") {
+        setServerError("Access denied. This portal is for Staff / Admin only. Please use the Student tab.");
+        return;
+      }
+
       localStorage.setItem("token", token);
       localStorage.setItem("role", role);
       if (role === "ADMIN")        navigate("/dashboard/admin");

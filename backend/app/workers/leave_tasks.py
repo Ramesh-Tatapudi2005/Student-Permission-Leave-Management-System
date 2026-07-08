@@ -88,11 +88,13 @@ def send_faculty_action_email(
     self, faculty_email: str, faculty_name: str, student_name: str, app_id: int, 
     approve_token: str, reject_token: str,
     leave_type: str = "Leave", from_date: str = "N/A", to_date: str = "N/A", reason: str = "N/A",
-    proctor_remarks: str = ""
+    proctor_remarks: str = "",
+    attachment_url: str = None
 ):
     """
-    Sends the Actionable Email to the Faculty/Proctor with the Magic Deep Links
-    and now includes the specific details and Proctor Remarks natively!
+    Sends the Actionable Email to the Faculty/Proctor with the Magic Deep Links,
+    request details, Proctor Remarks, and — when present — a secure one-click
+    link to view the student's parent's handwritten letter PDF.
     """
     try:
         print(f"[WORKER] Sending Actionable Email to faculty {faculty_email} for APP-{app_id}...")
@@ -116,10 +118,40 @@ def send_faculty_action_email(
             </tr>
             """
 
+        # Render an attachment button ONLY when the student uploaded a parent letter
+        attachment_section = ""
+        if attachment_url:
+            attachment_section = f"""
+            <div style="margin: 20px 0; padding: 16px 20px; background-color: #eff6ff;
+                        border: 1px solid #bfdbfe; border-radius: 8px;
+                        display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 22px;">📎</span>
+              <div>
+                <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: bold; color: #1e40af;">
+                  Parent's Handwritten Letter Attached
+                </p>
+                <p style="margin: 0 0 10px 0; font-size: 12px; color: #3b82f6;">
+                  The student has uploaded a scanned parent's letter for this request.
+                  Click the button below to view it directly in your browser — no login required.
+                </p>
+                <a href="{attachment_url}"
+                   style="display: inline-block; padding: 9px 18px;
+                          background-color: #1d4ed8; color: white;
+                          text-decoration: none; border-radius: 6px;
+                          font-size: 13px; font-weight: bold;">
+                  📄 View Parent's Letter (PDF)
+                </a>
+                <p style="margin: 8px 0 0 0; font-size: 11px; color: #6b7280;">
+                  This link is secure and expires in 3 days.
+                </p>
+              </div>
+            </div>
+            """
+
         html_content = f"""
         <html>
           <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px;">
-            <div style="max-w: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
               <div style="background-color: #4f46e5; padding: 20px; text-align: center;">
                 <h2 style="color: white; margin: 0; font-size: 20px;">Action Required</h2>
               </div>
@@ -127,7 +159,7 @@ def send_faculty_action_email(
                 <p style="font-size: 16px; margin-bottom: 20px;">Hello <strong>{faculty_name}</strong>,</p>
                 <p style="font-size: 16px;"><strong>{student_name}</strong> has submitted a new permission request (APP-{app_id}) that requires your review.</p>
                 
-                <!-- NEW DETAILS BOX -->
+                <!-- REQUEST DETAILS -->
                 <div style="background-color: #f1f5f9; padding: 20px; border-radius: 8px; margin: 25px 0; border: 1px solid #e2e8f0;">
                   <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 15px; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Request Details</h3>
                   <table style="width: 100%; font-size: 14px; color: #475569;" cellpadding="6" cellspacing="0">
@@ -146,13 +178,20 @@ def send_faculty_action_email(
                     {remarks_row}
                   </table>
                 </div>
+
+                <!-- ATTACHMENT SECTION (only shown when a file was uploaded) -->
+                {attachment_section}
                 
+                <!-- APPROVE / REJECT BUTTONS -->
                 <div style="margin: 30px 0; text-align: center;">
                   <a href="{approve_url}" style="display: inline-block; margin: 5px; padding: 14px 28px; background-color: #10b981; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">✅ Approve Request</a>
                   <a href="{reject_url}" style="display: inline-block; margin: 5px; padding: 14px 28px; background-color: #f43f5e; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">❌ Reject Request</a>
                 </div>
                 
                 <p style="font-size: 13px; color: #64748b; line-height: 1.5; text-align: center;">Clicking a button will securely open a quick-action page where you can leave optional remarks before finalizing.</p>
+              </div>
+              <div style="background-color: #f1f5f9; padding: 15px; text-align: center; color: #94a3b8; font-size: 12px;">
+                This is an automated message from the College Permission Management System. Please do not reply to this email.
               </div>
             </div>
           </body>
@@ -172,4 +211,4 @@ def send_faculty_action_email(
 
     except Exception as exc:
         print(f"[WORKER] Failed to send actionable email to {faculty_email}: {str(exc)}")
-        raise self.retry(exc=exc, countdown=60)
+        raise self.retry(exc=exc, countdown=60)

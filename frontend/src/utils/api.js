@@ -58,7 +58,10 @@ export const dashboardAPI = {
   // Student Endpoints
   getStudentProfile: () => API.get('/student/profile'),
   getStudentHistory: () => API.get('/leaves/student/history'),
-  applyPermission: (data) => API.post('/leaves/apply', data),
+  applyPermission: (formData) => API.post('/leaves/apply', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  viewParentLetter: (appId) => API.get(`/leaves/${appId}/attachment`, { responseType: 'blob' }),
   
   // Staff Endpoints (Faculty, HOD, Warden)
   getStaffProfile: () => API.get('/staff/profile'),

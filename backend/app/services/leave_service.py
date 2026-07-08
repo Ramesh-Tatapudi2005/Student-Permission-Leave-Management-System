@@ -8,7 +8,7 @@ import redis
 
 # --- NEW IMPORTS FOR EMAILS AND SECURITY ---
 from app.workers.leave_tasks import send_leave_notification, send_faculty_action_email
-from app.core.security import create_magic_token, decode_magic_token
+from app.core.security import create_magic_token, decode_magic_token, create_attachment_token
 # -------------------------------------------
 
 redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
@@ -16,7 +16,7 @@ redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
 class LeaveService:
     
     @staticmethod
-    def apply_leave(db: Session, student_roll_no: str, schema):
+    def apply_leave(db: Session, student_roll_no: str, schema, attachment_filename: str = None):
         student = db.query(Student).filter(Student.roll_no == student_roll_no).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
@@ -33,7 +33,8 @@ class LeaveService:
             from_date=schema.from_date,
             to_date=schema.to_date,
             current_approval_stage=initial_stage,
-            status="PENDING"
+            status="PENDING",
+            attachment_filename=attachment_filename
         )
         
         db.add(new_app)
@@ -58,8 +59,17 @@ class LeaveService:
                 proctor = db.query(Faculty).filter(Faculty.faculty_id == student.proctor_id).first()
                 if proctor and proctor.email:
                     approve_token = create_magic_token({"app_id": new_app.application_id, "faculty_id": proctor.emp_id, "action": "APPROVED"})
-                    reject_token = create_magic_token({"app_id": new_app.application_id, "faculty_id": proctor.emp_id, "action": "REJECTED"})
-                    
+                    reject_token  = create_magic_token({"app_id": new_app.application_id, "faculty_id": proctor.emp_id, "action": "REJECTED"})
+
+                    # Build a secure, tokenised link so the proctor can view the PDF
+                    # directly from their email client without needing to log in.
+                    attachment_url = None
+                    if new_app.attachment_filename:
+                        import os
+                        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+                        att_token = create_attachment_token(new_app.application_id)
+                        attachment_url = f"{backend_url}/leaves/attachment/view?token={att_token}"
+
                     send_faculty_action_email.delay(
                         faculty_email=proctor.email,
                         faculty_name=proctor.faculty_name,
@@ -70,7 +80,8 @@ class LeaveService:
                         leave_type=new_app.leave_type,
                         from_date=str(new_app.from_date),
                         to_date=str(new_app.to_date),
-                        reason=f"{new_app.subject} - {new_app.description}"
+                        reason=f"{new_app.subject} - {new_app.description}",
+                        attachment_url=attachment_url,
                     )
         except Exception as e:
             print(f"Warning: Could not queue faculty actionable email. Error: {str(e)}")
@@ -107,6 +118,7 @@ class LeaveService:
             LeaveApplication.proctor_remarks,  
             LeaveApplication.hod_remarks,      
             LeaveApplication.is_emergency,     
+            LeaveApplication.attachment_filename,
             Student.student_name,
             Student.department,
             Student.year
@@ -141,6 +153,7 @@ class LeaveService:
                 "proctor_remarks": row.proctor_remarks,  
                 "hod_remarks": row.hod_remarks,          
                 "is_emergency": row.is_emergency,        
+                "attachment_filename": row.attachment_filename,
                 "student_name": row.student_name,
                 "department": row.department,
                 "year": row.year
@@ -232,14 +245,12 @@ class LeaveService:
                 # 📧 TRIGGER ACTIONABLE EMAIL TO H.O.D.
                 # =======================================================
                 try:
-                    # Safely extract roll number and fetch student
                     roll_val = getattr(app, 'student_roll_no', getattr(app, 'roll_no', None))
                     student = db.query(Student).filter(Student.roll_no == roll_val).first()
                     
                     if student:
                         print(f"[SYSTEM] Processing stage escalation for Dept: {student.department}")
                         
-                        # Robust DB Query: Ignores cases and accidental spaces (e.g., 'CSE ' vs 'cse')
                         hod = db.query(Faculty).filter(
                             func.upper(func.trim(Faculty.department)) == func.upper(func.trim(student.department)), 
                             Faculty.role == "HOD"
@@ -248,9 +259,16 @@ class LeaveService:
                         if hod and hod.email:
                             print(f"[SYSTEM] HOD Match Found: {hod.faculty_name} ({hod.email}). Queuing Email...")
                             approve_token = create_magic_token({"app_id": app.application_id, "faculty_id": hod.emp_id, "action": "APPROVED"})
-                            reject_token = create_magic_token({"app_id": app.application_id, "faculty_id": hod.emp_id, "action": "REJECTED"})
-                            
-                            # Fire to Celery natively using the updated worker parameters
+                            reject_token  = create_magic_token({"app_id": app.application_id, "faculty_id": hod.emp_id, "action": "REJECTED"})
+
+                            # Also give the HOD a direct link to view the parent letter
+                            hod_attachment_url = None
+                            if app.attachment_filename:
+                                import os
+                                backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+                                att_token = create_attachment_token(app.application_id)
+                                hod_attachment_url = f"{backend_url}/leaves/attachment/view?token={att_token}"
+
                             send_faculty_action_email.delay(
                                 faculty_email=hod.email,
                                 faculty_name=hod.faculty_name,
@@ -262,7 +280,8 @@ class LeaveService:
                                 from_date=str(app.from_date),
                                 to_date=str(app.to_date),
                                 reason=f"{app.subject} - {app.description}",
-                                proctor_remarks=app.proctor_remarks or "No remarks provided." # Native parameter
+                                proctor_remarks=app.proctor_remarks or "No remarks provided.",
+                                attachment_url=hod_attachment_url,
                             )
                             print(f"[SYSTEM] ✅ HOD Email successfully dispatched to Celery Worker!")
                         else:

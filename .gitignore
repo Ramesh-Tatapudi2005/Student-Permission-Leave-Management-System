@@ -63,6 +63,7 @@ celerybeat.pid
 
 # Generated / Uploaded files
 /backend/generated_letters/
+/backend/parent_letters/
 /backend/downloads/
 *.pdf
 

@@ -27,6 +27,7 @@ class LeaveApplication(Base):
     proctor_remarks = Column(Text, nullable=True)
     hod_remarks = Column(Text, nullable=True)
     is_emergency = Column(Boolean, default=False)
+    attachment_filename = Column(String, nullable=True)  # Parent's handwritten letter PDF
     # ------------------------------
 
     # Relationship to audit trail

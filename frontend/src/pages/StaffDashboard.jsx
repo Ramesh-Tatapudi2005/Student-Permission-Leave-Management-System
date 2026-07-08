@@ -199,6 +199,16 @@ export default function StaffDashboard() {
     }
   };
 
+  const handleViewParentLetter = async (appId) => {
+    try {
+      const response = await dashboardAPI.viewParentLetter(appId);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch (error) {
+      notify("Failed to fetch parent's letter.", "error");
+    }
+  };
+
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length > 3) {
@@ -1122,10 +1132,10 @@ export default function StaffDashboard() {
                     </div>
                   </div>
 
-                  {selectedApp.attachment_url && (
+                  {selectedApp.attachment_filename && (
                     <div className="p-4 bg-[#0C3669]/5 border border-[#0C3669]/15 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm group hover:bg-[#0C3669]/10 transition-colors">
-                      <div className="flex items-center gap-4"><div className="p-3 bg-white text-[#0C3669] rounded-xl shadow-sm group-hover:scale-110 transition-transform"><Download size={20} /></div><div><p className="text-sm font-black text-slate-800">Attached Document</p><p className="text-xs font-bold text-[#0C3669]/60 mt-0.5">File attached</p></div></div>
-                      <a href={selectedApp.attachment_url} target="_blank" rel="noreferrer" className="text-center text-xs font-bold text-white bg-[#0C3669] hover:bg-[#0a2d59] px-6 py-3 rounded-xl shadow-md transition-all active:scale-95 w-full sm:w-auto uppercase tracking-widest">View File</a>
+                      <div className="flex items-center gap-4"><div className="p-3 bg-white text-[#0C3669] rounded-xl shadow-sm group-hover:scale-110 transition-transform"><FileText size={20} /></div><div><p className="text-sm font-black text-slate-800">Student's Handwritten Letter</p><p className="text-xs font-bold text-[#0C3669]/60 mt-0.5">PDF attachment with parent's signature</p></div></div>
+                      <button onClick={() => handleViewParentLetter(selectedApp.application_id)} className="text-center text-xs font-bold text-white bg-[#0C3669] hover:bg-[#0a2d59] px-6 py-3 rounded-xl shadow-md transition-all active:scale-95 w-full sm:w-auto uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer"><Eye size={14} /> View Letter</button>
                     </div>
                   )}
 

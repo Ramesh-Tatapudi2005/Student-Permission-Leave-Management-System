@@ -6,7 +6,7 @@ import {
   Sparkles, Filter, Search, Bell, User, Lock, Save,
   Menu, ChevronRight, Send, Clock, PlusCircle, AlertCircle, Download,
   Paperclip, Image as ImageIcon, Film, Eye, File as FileIcon, Users, CheckCircle, Loader2,
-  ExternalLink
+  ExternalLink, Upload
 } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -48,6 +48,7 @@ export default function StudentDashboard() {
   // --- APPLICATION STATES ---
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [viewRequestModal, setViewRequestModal] = useState(null); 
+  const [parentLetter, setParentLetter] = useState(null);
   const [newApp, setNewApp] = useState({
     leave_type: 'Leave',
     subject: '',
@@ -159,17 +160,130 @@ export default function StudentDashboard() {
     navigate('/login');
   };
 
+  // ── Shared date constants (kept in sync with backend schema) ──────────────
+  const DATE_MIN_NOTICE_DAYS  = 1;   // must apply ≥1 day before start
+  const DATE_MAX_ADVANCE_DAYS = 90;  // can't start more than 90 days from today
+  const DATE_MAX_DURATION     = 30;  // single application ≤ 30 calendar days
+
+  /** Returns 'YYYY-MM-DD' string offset by `n` days from today */
+  const offsetDate = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return d.toISOString().split('T')[0];
+  };
+
+  /** Count of calendar days between two 'YYYY-MM-DD' strings (inclusive) */
+  const daysBetween = (a, b) => {
+    if (!a || !b) return 0;
+    return Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
+  };
+
+  /** True if a 'YYYY-MM-DD' date falls on Saturday (6) or Sunday (0) */
+  const isWeekend = (str) => { const d = new Date(str); return d.getDay() === 0 || d.getDay() === 6; };
+
+  /** True when both dates are set and ALL days in the range are weekend days */
+  const isWeekendOnlyRange = (from, to) => {
+    if (!from || !to) return false;
+    const days = daysBetween(from, to);
+    if (days > 7) return false;  // can't be all-weekend if > 7 days
+    let d = new Date(from);
+    const end = new Date(to);
+    while (d <= end) {
+      if (d.getDay() !== 0 && d.getDay() !== 6) return false;
+      d.setDate(d.getDate() + 1);
+    }
+    return true;
+  };
+
   const handleApply = async (e) => {
     e.preventDefault();
+
+    // ── Industry-level client-side validation ─────────────────────────────
+    const todayStr = offsetDate(0);
+    const minStartStr = offsetDate(DATE_MIN_NOTICE_DAYS);   // e.g. tomorrow
+    const maxStartStr = offsetDate(DATE_MAX_ADVANCE_DAYS);  // 90 days ahead
+
+    if (!newApp.leave_type) {
+      notify("Please select a request type (Leave / Outpass / Other).", "error"); return;
+    }
+
+    const subject = newApp.subject.trim();
+    if (!subject) {
+      notify("Subject is required.", "error"); return;
+    }
+    if (subject.length < 3) {
+      notify("Subject must be at least 3 characters.", "error"); return;
+    }
+    if (subject.length > 255) {
+      notify("Subject must not exceed 255 characters.", "error"); return;
+    }
+
+    const description = newApp.description.trim();
+    if (!description) {
+      notify("Description is required.", "error"); return;
+    }
+    if (description.length < 10) {
+      notify("Description must be at least 10 characters.", "error"); return;
+    }
+    if (description.length > 2000) {
+      notify("Description must not exceed 2000 characters.", "error"); return;
+    }
+
+    // ── Date validations ──
+    if (!newApp.from_date) {
+      notify("Start date is required.", "error"); return;
+    }
+    if (newApp.from_date < todayStr) {
+      notify("Start date cannot be in the past.", "error"); return;
+    }
+    if (newApp.from_date < minStartStr) {
+      notify(`Applications require at least ${DATE_MIN_NOTICE_DAYS} day advance notice. Earliest start date is tomorrow.`, "error"); return;
+    }
+    if (newApp.from_date > maxStartStr) {
+      notify(`Start date cannot be more than ${DATE_MAX_ADVANCE_DAYS} days from today.`, "error"); return;
+    }
+
+    if (!newApp.to_date) {
+      notify("End date is required.", "error"); return;
+    }
+    if (newApp.to_date < newApp.from_date) {
+      notify("End date must be on or after the start date.", "error"); return;
+    }
+
+    const duration = daysBetween(newApp.from_date, newApp.to_date);
+    if (duration > DATE_MAX_DURATION) {
+      notify(`Leave duration (${duration} days) exceeds the ${DATE_MAX_DURATION}-day limit. Please split into separate requests.`, "error"); return;
+    }
+
+    // ── File validations ──
+    if (!parentLetter) {
+      notify("Please attach your parent's handwritten letter (PDF).", "error"); return;
+    }
+    if (parentLetter.type !== "application/pdf") {
+      notify("Only PDF files are accepted for the parent's letter.", "error"); return;
+    }
+    if (parentLetter.size > 5 * 1024 * 1024) {
+      notify("Parent's letter must not exceed 5 MB.", "error"); return;
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     setIsSubmitting(true);
     try {
-      await dashboardAPI.applyPermission(newApp);
+      const formData = new FormData();
+      formData.append('leave_type', newApp.leave_type);
+      formData.append('subject', subject);
+      formData.append('description', description);
+      formData.append('from_date', newApp.from_date);
+      formData.append('to_date', newApp.to_date);
+      formData.append('parent_letter', parentLetter);
+      await dashboardAPI.applyPermission(formData);
       setShowApplyModal(false);
       setNewApp({ leave_type: 'Leave', subject: '', description: '', from_date: '', to_date: '' });
+      setParentLetter(null);
       notify("Request submitted successfully.", "success");
-      await fetchData(); 
+      await fetchData();
     } catch (err) {
-      notify(getApiError(err, 'Failed to submit request.'), 'error');
+      notify(getApiError(err, 'Failed to submit request. Please try again.'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -242,6 +356,16 @@ export default function StudentDashboard() {
       notify("Failed to download letter. It may not be generated yet.", "error");
     } finally {
       setDownloadingAppId(null);
+    }
+  };
+
+  const handleViewParentLetter = async (appId) => {
+    try {
+      const response = await dashboardAPI.viewParentLetter(appId);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch (error) {
+      notify("Failed to fetch parent's letter.", "error");
     }
   };
 
@@ -945,20 +1069,161 @@ export default function StudentDashboard() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
-                      <div>
-                        <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">Start Date</label>
-                        <input required type="date" value={newApp.from_date} onChange={(e) => setNewApp({...newApp, from_date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-bold rounded-xl focus:ring-4 focus:ring-[#0C3669]/20 focus:border-[#0C3669] block p-4 outline-none transition-all shadow-inner cursor-pointer text-sm" />
+                    <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* ── Start Date ── */}
+                        <div>
+                          <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">
+                            Start Date <span className="text-rose-400">*</span>
+                          </label>
+                          <input
+                            required
+                            type="date"
+                            value={newApp.from_date}
+                            min={offsetDate(DATE_MIN_NOTICE_DAYS)}
+                            max={offsetDate(DATE_MAX_ADVANCE_DAYS)}
+                            onChange={(e) => {
+                              const newFrom = e.target.value;
+                              setNewApp(prev => ({
+                                ...prev,
+                                from_date: newFrom,
+                                // Auto-reset to_date if it's now before the new start or exceeds max duration
+                                to_date: prev.to_date && (
+                                  prev.to_date < newFrom ||
+                                  daysBetween(newFrom, prev.to_date) > DATE_MAX_DURATION
+                                ) ? '' : prev.to_date
+                              }));
+                            }}
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-bold rounded-xl focus:ring-4 focus:ring-[#0C3669]/20 focus:border-[#0C3669] block p-4 outline-none transition-all shadow-inner cursor-pointer text-sm"
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
+                            Min: tomorrow · Max: {DATE_MAX_ADVANCE_DAYS} days from today
+                          </p>
+                        </div>
+
+                        {/* ── End Date ── */}
+                        <div>
+                          <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">
+                            End Date <span className="text-rose-400">*</span>
+                          </label>
+                          <input
+                            required
+                            type="date"
+                            value={newApp.to_date}
+                            min={newApp.from_date || offsetDate(DATE_MIN_NOTICE_DAYS)}
+                            max={
+                              newApp.from_date
+                                ? (() => {
+                                    const d = new Date(newApp.from_date);
+                                    d.setDate(d.getDate() + DATE_MAX_DURATION - 1);
+                                    return d.toISOString().split('T')[0];
+                                  })()
+                                : offsetDate(DATE_MAX_ADVANCE_DAYS + DATE_MAX_DURATION)
+                            }
+                            onChange={(e) => setNewApp({...newApp, to_date: e.target.value})}
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-bold rounded-xl focus:ring-4 focus:ring-[#0C3669]/20 focus:border-[#0C3669] block p-4 outline-none transition-all shadow-inner cursor-pointer text-sm"
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
+                            Must be on or after start date · Max {DATE_MAX_DURATION} days duration
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">End Date</label>
-                        <input required type="date" value={newApp.to_date} onChange={(e) => setNewApp({...newApp, to_date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-bold rounded-xl focus:ring-4 focus:ring-[#0C3669]/20 focus:border-[#0C3669] block p-4 outline-none transition-all shadow-inner cursor-pointer text-sm" />
-                      </div>
+
+                      {/* ── Live duration badge ── */}
+                      {newApp.from_date && newApp.to_date && (() => {
+                        const days = daysBetween(newApp.from_date, newApp.to_date);
+                        const weekendOnly = isWeekendOnlyRange(newApp.from_date, newApp.to_date);
+                        const overLimit = days > DATE_MAX_DURATION;
+                        return (
+                          <div className={`flex flex-wrap items-center gap-3 pt-2 border-t ${
+                            overLimit ? 'border-rose-100' : weekendOnly ? 'border-amber-100' : 'border-slate-100'
+                          }`}>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black ${
+                              overLimit
+                                ? 'bg-rose-100 text-rose-600'
+                                : days === 1
+                                ? 'bg-sky-100 text-sky-700'
+                                : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              📅 {days} {days === 1 ? 'day' : 'days'} selected
+                              {overLimit && ` — exceeds ${DATE_MAX_DURATION}-day limit`}
+                            </span>
+                            {weekendOnly && !overLimit && (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black bg-amber-100 text-amber-700">
+                                ⚠️ Selected dates fall on weekends only
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div>
                       <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">Reason for Request</label>
                       <textarea required rows="4" value={newApp.description} onChange={(e) => setNewApp({...newApp, description: e.target.value})} placeholder="Provide detailed reasoning for the reviewing authority..." className="w-full bg-white border border-slate-200 text-slate-800 font-medium rounded-3xl focus:ring-4 focus:ring-[#0C3669]/20 focus:border-[#0C3669] block p-6 outline-none transition-all shadow-inner resize-none text-sm leading-relaxed"></textarea>
+                    </div>
+
+                    {/* PARENT'S HANDWRITTEN LETTER UPLOAD */}
+                    <div>
+                      <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">Parent's Handwritten Letter (PDF) <span className="text-rose-500">*</span></label>
+                      <p className="text-[11px] text-slate-400 font-medium mb-3">Upload a scanned/photographed PDF of the handwritten letter with your parent's signature.</p>
+                      <div 
+                        className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer group hover:border-[#0C3669]/40 hover:bg-[#0C3669]/5 ${
+                          parentLetter ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'
+                        }`}
+                        onClick={() => document.getElementById('parent-letter-input').click()}
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onDrop={(e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          const file = e.dataTransfer.files[0];
+                          if (file) {
+                            if (file.type !== 'application/pdf') { notify('Only PDF files are allowed.', 'error'); return; }
+                            if (file.size > 5 * 1024 * 1024) { notify('File must be under 5 MB.', 'error'); return; }
+                            setParentLetter(file);
+                          }
+                        }}
+                      >
+                        <input 
+                          id="parent-letter-input" 
+                          type="file" 
+                          accept=".pdf,application/pdf" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              if (file.type !== 'application/pdf') { notify('Only PDF files are allowed.', 'error'); return; }
+                              if (file.size > 5 * 1024 * 1024) { notify('File must be under 5 MB.', 'error'); return; }
+                              setParentLetter(file);
+                            }
+                          }}
+                        />
+                        {parentLetter ? (
+                          <div className="flex items-center justify-center gap-3">
+                            <div className="p-2.5 bg-emerald-100 rounded-xl text-emerald-600">
+                              <FileText size={22} />
+                            </div>
+                            <div className="text-left">
+                              <p className="text-sm font-bold text-slate-800 truncate max-w-[200px]">{parentLetter.name}</p>
+                              <p className="text-[11px] font-medium text-emerald-600">{(parentLetter.size / 1024).toFixed(1)} KB — PDF Ready</p>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={(e) => { e.stopPropagation(); setParentLetter(null); }} 
+                              className="ml-2 p-1.5 bg-rose-100 text-rose-500 rounded-lg hover:bg-rose-200 transition-colors"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="mx-auto w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-[#0C3669] group-hover:bg-[#0C3669]/10 transition-all">
+                              <Upload size={22} />
+                            </div>
+                            <p className="text-sm font-bold text-slate-500">Drag & drop your PDF here, or <span className="text-[#0C3669] underline">browse</span></p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PDF only · Max 5 MB</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex flex-col-reverse sm:flex-row gap-4 pt-6 border-t border-slate-200/60">
@@ -1012,6 +1277,24 @@ export default function StudentDashboard() {
                     </div>
                   </div>
                   
+                  {/* Parent's Handwritten Letter Attachment */}
+                  {viewRequestModal.attachment_filename && (
+                    <div className="p-4 bg-emerald-50/50 border border-emerald-200/50 rounded-2xl flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-emerald-100 rounded-xl text-emerald-600">
+                          <FileText size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">Parent's Letter Attached</p>
+                          <p className="text-[11px] font-medium text-emerald-600">PDF with parent's signature</p>
+                        </div>
+                      </div>
+                      <button onClick={() => handleViewParentLetter(viewRequestModal.application_id)} className="text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-4 py-2 rounded-lg transition-colors uppercase tracking-widest flex items-center gap-1.5 cursor-pointer">
+                        <Eye size={12} /> View
+                      </button>
+                    </div>
+                  )}
+
                   {/* Dedicated Remarks Section */}
                   {(viewRequestModal.proctor_remarks || viewRequestModal.hod_remarks) && (
                     <div className="border-t border-slate-100 pt-6 space-y-4">

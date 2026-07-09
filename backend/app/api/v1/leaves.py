@@ -9,10 +9,9 @@ from app.core.security import get_current_user, decode_attachment_token  # JWT d
 from app.models.leave import LeaveApplication
 from app.models.user import Student
 from fastapi_limiter.depends import FastAPILimiter
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse
 from fpdf import FPDF
 from datetime import date
-from supabase import create_client, Client
 import os
 import uuid
 
@@ -44,10 +43,9 @@ async def safe_rate_limiter(request: Request):
 
 # --- STUDENT ROUTES ---
 
-# --- Setup Supabase Client for Storage ---
-SUPABASE_URL = os.getenv("SUPABASE_URL", "your-supabase-project-url")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "your-supabase-service-role-key")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Directory for storing parent's handwritten letter PDFs
+PARENT_LETTERS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "parent_letters")
+os.makedirs(PARENT_LETTERS_DIR, exist_ok=True)
 
 @router.post("/apply", dependencies=[Depends(safe_rate_limiter)])
 async def apply_permission(
@@ -101,13 +99,11 @@ async def apply_permission(
                 messages.append(msg)
         raise HTTPException(status_code=400, detail=" | ".join(messages) if messages else "Invalid application data.")
     
-    # Save the PDF file to Supabase Storage
+    # Save the PDF file with a unique name
     unique_filename = f"{current_user['sub']}_{uuid.uuid4().hex[:8]}_{parent_letter.filename}"
-    supabase.storage.from_("parent_letters").upload(
-        file=contents,
-        path=unique_filename,
-        file_options={"content-type": "application/pdf"}
-    )
+    file_path = os.path.join(PARENT_LETTERS_DIR, unique_filename)
+    with open(file_path, "wb") as f:
+        f.write(contents)
     
     return LeaveService.apply_leave(db, current_user["sub"], schema, attachment_filename=unique_filename)
 
@@ -133,15 +129,14 @@ def view_attachment_via_token(
     if not app.attachment_filename:
         raise HTTPException(status_code=404, detail="No parent letter was attached to this application.")
 
-    try:
-        file_data = supabase.storage.from_("parent_letters").download(app.attachment_filename)
-    except Exception as e:
+    file_path = os.path.join(PARENT_LETTERS_DIR, app.attachment_filename)
+    if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Attachment file not found on server.")
-        
-    return Response(
-        content=file_data,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="Parent_Letter_APP_{app_id}.pdf"'}
+
+    return FileResponse(
+        path=file_path,
+        filename=f"Parent_Letter_APP_{app_id}.pdf",
+        media_type="application/pdf"
     )
 
 
@@ -158,15 +153,14 @@ def get_parent_letter_attachment(
     if not app.attachment_filename:
         raise HTTPException(status_code=404, detail="No parent letter attached to this application.")
     
-    try:
-        file_data = supabase.storage.from_("parent_letters").download(app.attachment_filename)
-    except Exception as e:
+    file_path = os.path.join(PARENT_LETTERS_DIR, app.attachment_filename)
+    if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Attachment file not found on server.")
     
-    return Response(
-        content=file_data,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="Parent_Letter_APP_{app_id}.pdf"'}
+    return FileResponse(
+        path=file_path,
+        filename=f"Parent_Letter_APP_{app_id}.pdf",
+        media_type="application/pdf"
     )
 
 @router.get("/student/history")

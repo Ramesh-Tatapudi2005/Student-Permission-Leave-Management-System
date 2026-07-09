@@ -205,7 +205,7 @@ export default function StaffDashboard() {
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       window.open(url, '_blank');
     } catch (error) {
-      notify("Failed to fetch parent's letter.", "error");
+      notify("Failed to fetch proof pdf.", "error");
     }
   };
 
@@ -1134,8 +1134,8 @@ export default function StaffDashboard() {
 
                   {selectedApp.attachment_filename && (
                     <div className="p-4 bg-[#0C3669]/5 border border-[#0C3669]/15 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm group hover:bg-[#0C3669]/10 transition-colors">
-                      <div className="flex items-center gap-4"><div className="p-3 bg-white text-[#0C3669] rounded-xl shadow-sm group-hover:scale-110 transition-transform"><FileText size={20} /></div><div><p className="text-sm font-black text-slate-800">Student's Handwritten Letter</p><p className="text-xs font-bold text-[#0C3669]/60 mt-0.5">PDF attachment with parent's signature</p></div></div>
-                      <button onClick={() => handleViewParentLetter(selectedApp.application_id)} className="text-center text-xs font-bold text-white bg-[#0C3669] hover:bg-[#0a2d59] px-6 py-3 rounded-xl shadow-md transition-all active:scale-95 w-full sm:w-auto uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer"><Eye size={14} /> View Letter</button>
+                      <div className="flex items-center gap-4"><div className="p-3 bg-white text-[#0C3669] rounded-xl shadow-sm group-hover:scale-110 transition-transform"><FileText size={20} /></div><div><p className="text-sm font-black text-slate-800">Student's proof for the permission</p><p className="text-xs font-bold text-[#0C3669]/60 mt-0.5">PDF attachment with proof pdf</p></div></div>
+                      <button onClick={() => handleViewParentLetter(selectedApp.application_id)} className="text-center text-xs font-bold text-white bg-[#0C3669] hover:bg-[#0a2d59] px-6 py-3 rounded-xl shadow-md transition-all active:scale-95 w-full sm:w-auto uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer"><Eye size={14} /> View proof</button>
                     </div>
                   )}
 

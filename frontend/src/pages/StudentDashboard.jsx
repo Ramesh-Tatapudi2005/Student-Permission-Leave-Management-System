@@ -257,13 +257,13 @@ export default function StudentDashboard() {
 
     // ── File validations ──
     if (!parentLetter) {
-      notify("Please attach your parent's handwritten letter (PDF).", "error"); return;
+      notify("Please attach your proof for permission (PDF).", "error"); return;
     }
     if (parentLetter.type !== "application/pdf") {
-      notify("Only PDF files are accepted for the parent's letter.", "error"); return;
+      notify("Only PDF files are accepted for the proof permission pdf.", "error"); return;
     }
     if (parentLetter.size > 5 * 1024 * 1024) {
-      notify("Parent's letter must not exceed 5 MB.", "error"); return;
+      notify("Proof pdf must not exceed 5 MB.", "error"); return;
     }
     // ─────────────────────────────────────────────────────────────────────
 
@@ -365,7 +365,7 @@ export default function StudentDashboard() {
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       window.open(url, '_blank');
     } catch (error) {
-      notify("Failed to fetch parent's letter.", "error");
+      notify("Failed to fetch proof pdf.", "error");
     }
   };
 
@@ -1165,8 +1165,8 @@ export default function StudentDashboard() {
 
                     {/* PARENT'S HANDWRITTEN LETTER UPLOAD */}
                     <div>
-                      <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">Parent's Handwritten Letter (PDF) <span className="text-rose-500">*</span></label>
-                      <p className="text-[11px] text-slate-400 font-medium mb-3">Upload a scanned/photographed PDF of the handwritten letter with your parent's signature.</p>
+                      <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">Proof for permission (PDF) <span className="text-rose-500">*</span></label>
+                      <p className="text-[11px] text-slate-400 font-medium mb-3">Upload a scanned/photographed PDF of the proof for the permission.</p>
                       <div 
                         className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer group hover:border-[#0C3669]/40 hover:bg-[#0C3669]/5 ${
                           parentLetter ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'
@@ -1285,8 +1285,8 @@ export default function StudentDashboard() {
                           <FileText size={18} />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-slate-800">Parent's Letter Attached</p>
-                          <p className="text-[11px] font-medium text-emerald-600">PDF with parent's signature</p>
+                          <p className="text-sm font-bold text-slate-800">Proof for permission Attached</p>
+                          <p className="text-[11px] font-medium text-emerald-600">PDF with proof</p>
                         </div>
                       </div>
                       <button onClick={() => handleViewParentLetter(viewRequestModal.application_id)} className="text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-4 py-2 rounded-lg transition-colors uppercase tracking-widest flex items-center gap-1.5 cursor-pointer">

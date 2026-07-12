@@ -7,7 +7,7 @@ from app.utils.sockets import manager
 from app.utils.redis_pubsub import redis_pubsub
 from app.db.session import get_db
 from app.models.user import Student, Faculty, AuthUser
-from app.models.models import Announcement, AnnouncementRead, AnnouncementAttachment
+from app.models.models import Announcement, AnnouncementRead, AnnouncementAttachment, AnnouncementReply
 from app.schemas.schemas import AnnouncementCreate
 from datetime import datetime
 from supabase import create_client, Client
@@ -154,8 +154,16 @@ async def websocket_endpoint(websocket: WebSocket, roll_no: str):
             user_role = "STUDENT"
             user_dept = student.department
             user_year = student.year
-            # Grab the proctor_id so we know who is allowed to message them privately
-            user_proctor_id = getattr(student, 'proctor_id', None) 
+            # FIX: proctor_id is an integer faculty.faculty_id (PK).
+            # posted_by stores the faculty's emp_id (string).
+            # We must resolve faculty_id → emp_id here so the WS RBAC
+            # broadcaster can compare user_proctor_id == posted_by correctly.
+            raw_proctor_id = getattr(student, 'proctor_id', None)
+            if raw_proctor_id is not None:
+                proctor_faculty = db.query(Faculty).filter(Faculty.faculty_id == raw_proctor_id).first()
+                user_proctor_id = proctor_faculty.emp_id if proctor_faculty else None
+            else:
+                user_proctor_id = None
             
     finally:
         # 3. CRITICAL: Close the DB connection immediately so others can use it!
@@ -270,8 +278,22 @@ async def get_announcement_feed(user_id: str, db: Session = Depends(get_db)):
     
     if student:
         proctor_id = getattr(student, 'proctor_id', None)
-        
+
+        # FIX: Student.proctor_id is the INTEGER faculty.faculty_id (PK),
+        # but Announcement.posted_by stores the faculty's STRING emp_id.
+        # We must resolve the faculty_id → emp_id before filtering.
+        proctor_emp_id = None
+        if proctor_id is not None:
+            proctor_faculty = db.query(Faculty).filter(Faculty.faculty_id == proctor_id).first()
+            if proctor_faculty:
+                proctor_emp_id = proctor_faculty.emp_id
+
         # Student SQL Filter Matrix
+        proctored_filter = (
+            (Announcement.target_role == "PROCTORED_STUDENTS") &
+            (Announcement.posted_by == proctor_emp_id)
+        ) if proctor_emp_id else (Announcement.target_role == "NEVER_MATCH_PLACEHOLDER")
+
         query = query.filter(
             (Announcement.target_role == "ALL") |
             (
@@ -279,10 +301,7 @@ async def get_announcement_feed(user_id: str, db: Session = Depends(get_db)):
                 (Announcement.target_dept.in_(["ALL", student.department])) & 
                 ((Announcement.target_year == student.year) | (Announcement.target_year.is_(None)))
             ) |
-            (
-                (Announcement.target_role == "PROCTORED_STUDENTS") & 
-                (Announcement.posted_by == str(proctor_id))
-            )
+            proctored_filter
         )
     elif faculty: 
         role = faculty.role.upper()
@@ -303,23 +322,42 @@ async def get_announcement_feed(user_id: str, db: Session = Depends(get_db)):
             )
     
     feed = query.order_by(Announcement.created_at.desc()).limit(50).all()
-    
+
+    # Build a faculty name cache to avoid N+1 DB queries
+    poster_emp_ids = list({ann.posted_by for ann in feed})
+    faculty_map: dict[str, Faculty] = {}
+    if poster_emp_ids:
+        faculties = db.query(Faculty).filter(Faculty.emp_id.in_(poster_emp_ids)).all()
+        faculty_map = {f.emp_id: f for f in faculties}
+
+    # Resolve proctor_emp_id for is_from_proctor flag (student only)
+    _proctor_emp_id = locals().get("proctor_emp_id", None)
+
     # Format the data cleanly for React
     result = []
     for ann in feed:
+        poster = faculty_map.get(ann.posted_by)
         result.append({
             "announcement_id": ann.announcement_id,
             "title": ann.title,
             "description": ann.description,
             "posted_by": ann.posted_by,
+            "posted_by_name": poster.faculty_name if poster else ann.posted_by,
             "posted_role": ann.posted_role,
+            "target_role": ann.target_role,
             "target_dept": ann.target_dept,
             "target_year": ann.target_year,
             "priority_level": ann.priority_level,
             "status": ann.status,
-            "created_at": str(ann.created_at), 
+            "created_at": str(ann.created_at),
+            # True when this specific announcement was sent by the student's proctor
+            "is_from_proctor": (
+                ann.target_role == "PROCTORED_STUDENTS" and
+                _proctor_emp_id is not None and
+                ann.posted_by == _proctor_emp_id
+            ),
             "attachments": [
-                {"file_url": att.file_url, "file_type": att.file_type} 
+                {"file_url": att.file_url, "file_type": att.file_type}
                 for att in ann.attachments
             ]
         })
@@ -394,29 +432,157 @@ async def get_staff_announcements(emp_id: str, db: Session = Depends(get_db)):
         .filter(Announcement.posted_by == emp_id)\
         .order_by(Announcement.created_at.desc())\
         .all()
-    
+
+    # Fetch the poster's name once for the "My Announcements" view
+    poster_faculty = db.query(Faculty).filter(Faculty.emp_id == emp_id).first()
+    poster_name = poster_faculty.faculty_name if poster_faculty else emp_id
+
     result = []
     for ann in staff_announcements:
         view_count = db.query(AnnouncementRead)\
             .filter(AnnouncementRead.announcement_id == ann.announcement_id)\
             .count()
-            
+
         ann_data = {
             "announcement_id": ann.announcement_id,
             "title": ann.title,
             "description": ann.description,
+            "posted_by": ann.posted_by,
+            "posted_by_name": poster_name,
             "posted_role": ann.posted_role,
+            "target_role": ann.target_role,
             "target_dept": ann.target_dept,
             "target_year": ann.target_year,
             "priority_level": ann.priority_level,
             "status": ann.status,
             "created_at": str(ann.created_at),
             "total_views": view_count,
+            "is_from_proctor": False,
             "attachments": [
-                {"file_url": att.file_url, "file_type": att.file_type} 
+                {"file_url": att.file_url, "file_type": att.file_type}
                 for att in ann.attachments
             ]
         }
         result.append(ann_data)
-        
+
     return result
+
+
+# ==========================================
+# 7. ANNOUNCEMENT REPLIES (PROCTORED ONLY)
+# ==========================================
+
+class ReplyRequest(object):
+    pass
+
+from pydantic import BaseModel as _BM
+
+class _ReplyBody(_BM):
+    student_roll_no: str
+    message: str
+
+
+@announcements_router.post("/announcements/{announcement_id}/reply", status_code=201)
+async def post_announcement_reply(
+    announcement_id: int,
+    body: _ReplyBody,
+    db: Session = Depends(get_db),
+):
+    """
+    A student sends a reply to a PROCTORED_STUDENTS announcement.
+
+    Guards:
+      - The announcement must exist and be of type PROCTORED_STUDENTS.
+      - The student must exist and have a proctor assigned.
+      - The announcement's posted_by (emp_id) must match the student's proctor's emp_id.
+    """
+    # 1. Fetch announcement
+    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found.")
+    if ann.target_role != "PROCTORED_STUDENTS":
+        raise HTTPException(status_code=403, detail="Replies are only allowed on announcements sent to proctored students.")
+
+    # 2. Fetch the student and verify they have a proctor
+    student = db.query(Student).filter(Student.roll_no == body.student_roll_no).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+    if not student.proctor_id:
+        raise HTTPException(status_code=403, detail="You do not have an assigned proctor.")
+
+    # 3. Resolve the student's proctor emp_id and compare to posted_by
+    proctor = db.query(Faculty).filter(Faculty.faculty_id == student.proctor_id).first()
+    if not proctor or proctor.emp_id != ann.posted_by:
+        raise HTTPException(status_code=403, detail="You can only reply to announcements sent by your own proctor.")
+
+    # 4. Persist the reply
+    reply = AnnouncementReply(
+        announcement_id=announcement_id,
+        student_roll_no=body.student_roll_no,
+        message=body.message.strip(),
+    )
+    db.add(reply)
+    db.commit()
+    db.refresh(reply)
+
+    return {
+        "reply_id": reply.reply_id,
+        "announcement_id": reply.announcement_id,
+        "student_roll_no": reply.student_roll_no,
+        "message": reply.message,
+        "created_at": str(reply.created_at),
+    }
+
+
+@announcements_router.get("/announcements/{announcement_id}/replies")
+async def get_announcement_replies(
+    announcement_id: int,
+    emp_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Proctor fetches all student replies for one of their announcements.
+
+    Guards:
+      - The announcement must belong to the requesting faculty (posted_by == emp_id).
+      - The announcement must be of type PROCTORED_STUDENTS.
+    """
+    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found.")
+    if ann.posted_by != emp_id:
+        raise HTTPException(status_code=403, detail="You can only view replies for your own announcements.")
+    if ann.target_role != "PROCTORED_STUDENTS":
+        raise HTTPException(status_code=400, detail="This announcement does not support replies.")
+
+    replies = (
+        db.query(AnnouncementReply)
+        .filter(AnnouncementReply.announcement_id == announcement_id)
+        .order_by(AnnouncementReply.created_at.asc())
+        .all()
+    )
+
+    # Enrich each reply with the student's name
+    result = []
+    for r in replies:
+        stu = db.query(Student).filter(Student.roll_no == r.student_roll_no).first()
+        result.append({
+            "reply_id": r.reply_id,
+            "student_roll_no": r.student_roll_no,
+            "student_name": stu.student_name if stu else r.student_roll_no,
+            "message": r.message,
+            "created_at": str(r.created_at),
+        })
+
+    return result
+
+
+@announcements_router.get("/announcements/{announcement_id}/reply-count")
+async def get_reply_count(
+    announcement_id: int,
+    db: Session = Depends(get_db),
+):
+    """Returns the total number of student replies for a given announcement."""
+    count = db.query(AnnouncementReply).filter(AnnouncementReply.announcement_id == announcement_id).count()
+    return {"announcement_id": announcement_id, "reply_count": count}
+

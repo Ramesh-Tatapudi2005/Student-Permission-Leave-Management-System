@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import engine, Base
 from app.models.user import AuthUser, Student, Faculty, PasswordOTP
 from app.models.leave import LeaveApplication, LeaveApproval
+from app.models.models import Announcement, AnnouncementAttachment, AnnouncementRead, AnnouncementReply
 from app.utils.redis_pubsub import redis_pubsub
 
 Base.metadata.create_all(bind=engine)

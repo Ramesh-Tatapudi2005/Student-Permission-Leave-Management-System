@@ -1146,7 +1146,8 @@ export default function AdminDashboard() {
                               <span className={`px-2.5 py-1 rounded-md text-[10px] font-black tracking-widest uppercase ${ann.posted_role === 'ADMIN' ? 'bg-rose-100 text-rose-700' : 'bg-[#0C3669]/10 text-[#0C3669]'}`}>
                                 {ann.posted_role}
                               </span>
-                              <p className="text-xs font-bold text-slate-500 mt-2">{ann.posted_by}</p>
+                              <p className="text-sm font-black text-slate-700 mt-2">{ann.posted_by_name || ann.posted_by}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">ID: {ann.posted_by}</p>
                             </td>
                             <td className="p-5 max-w-[250px]">
                               <div className="flex items-center gap-2 mb-1.5">
@@ -1202,9 +1203,9 @@ export default function AdminDashboard() {
             <div className="p-8 bg-slate-50/50">
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><User size={12}/> Origin</p>
-                  <p className="font-bold text-slate-800">{viewBroadcastDetails.posted_by}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 font-bold uppercase">{viewBroadcastDetails.posted_role}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><User size={12}/> Sender</p>
+                  <p className="font-black text-slate-800 text-base">{viewBroadcastDetails.posted_by_name || viewBroadcastDetails.posted_by}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-bold uppercase tracking-wider">{viewBroadcastDetails.posted_role} · ID: {viewBroadcastDetails.posted_by}</p>
                 </div>
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><Clock size={12}/> Time</p>

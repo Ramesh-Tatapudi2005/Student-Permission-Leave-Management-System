@@ -66,6 +66,9 @@ export default function StaffDashboard() {
   const [myAnnouncements, setMyAnnouncements] = useState([]); 
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  // Reply states — proctor views student replies
+  const [annReplies, setAnnReplies] = useState([]);
+  const [annRepliesLoading, setAnnRepliesLoading] = useState(false);
   
   const [newBroadcast, setNewBroadcast] = useState({
     title: '',
@@ -673,15 +676,30 @@ export default function StaffDashboard() {
                     style={{ animationDelay: `${idx * 50}ms` }}
                   >
                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors ${ann.priority_level === 'HIGH' ? 'bg-amber-400' : ann.priority_level === 'EMERGENCY' ? 'bg-rose-500 animate-pulse' : 'bg-indigo-400'}`}></div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2 py-1 rounded">From: {ann.posted_role}</span>
-                      <span className={`text-[9px] px-2.5 py-1 rounded font-black tracking-widest uppercase ${ann.priority_level === 'EMERGENCY' ? 'bg-rose-100 text-rose-600' : ann.priority_level === 'HIGH' ? 'bg-amber-100 text-amber-600' : 'text-slate-400'}`}>{ann.priority_level !== 'STANDARD' ? ann.priority_level : new Date(ann.created_at).toLocaleDateString()}</span>
+
+                    {/* Priority + date */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className={`text-[9px] px-2.5 py-1 rounded-full font-black tracking-widest uppercase ${ann.priority_level === 'EMERGENCY' ? 'bg-rose-100 text-rose-600' : ann.priority_level === 'HIGH' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>{ann.priority_level !== 'STANDARD' ? ann.priority_level : 'STANDARD'}</span>
+                      <span className="text-[10px] font-semibold text-slate-400">{new Date(ann.created_at).toLocaleDateString()}</span>
                     </div>
-                    <div className="flex-1 mb-6">
+
+                    <div className="flex-1 mb-4">
                       <h4 className="text-lg font-black text-slate-800 leading-tight mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors">{ann.title}</h4>
                       <p className="text-sm text-slate-500 font-medium line-clamp-2">{ann.description}</p>
                     </div>
-                    <div className="pt-4 mt-auto border-t border-slate-100 flex items-center justify-between">
+
+                    {/* Poster info strip */}
+                    <div className="bg-slate-50 rounded-xl px-3 py-2 mb-4 flex items-center gap-2 border border-slate-100">
+                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                        <User size={13} className="text-indigo-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-slate-800 truncate">{ann.posted_by_name || ann.posted_by}</p>
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{ann.posted_role} · {ann.posted_by}</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 mt-auto border-t border-slate-100 flex items-center justify-between">
                       <span className="text-xs font-bold text-indigo-500 group-hover:text-indigo-600 flex items-center gap-1 transition-colors"><Eye size={14} /> Read More</span>
                       {ann.attachments?.length > 0 && <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100 text-slate-500"><Paperclip size={12} /><span className="text-[10px] font-bold uppercase tracking-wider">{ann.attachments.length} Attached</span></div>}
                     </div>
@@ -702,22 +720,64 @@ export default function StaffDashboard() {
                 {myAnnouncements.map((ann, idx) => (
                   <div 
                     key={idx} 
-                    onClick={() => setSelectedViewAnnouncement(ann)} 
+                    onClick={async () => {
+                      setSelectedViewAnnouncement(ann);
+                      setAnnReplies([]);
+                      if (ann.target_role === 'PROCTORED_STUDENTS') {
+                        setAnnRepliesLoading(true);
+                        try {
+                          const res = await dashboardAPI.getAnnouncementReplies(ann.announcement_id, ann.posted_by);
+                          setAnnReplies(res.data || []);
+                        } catch (err) {
+                          console.error('Failed to fetch replies:', err);
+                        } finally {
+                          setAnnRepliesLoading(false);
+                        }
+                      }
+                    }} 
                     className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col group hover:-translate-y-1 animate-stagger-in" 
                     style={{ animationDelay: `${idx * 50}ms` }}
                   >
                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors ${ann.priority_level === 'EMERGENCY' ? 'bg-rose-500' : 'bg-indigo-500'}`}></div>
-                    <div className="flex items-center justify-between mb-4">
+
+                    <div className="flex items-center justify-between mb-3">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-2 py-1 rounded">{new Date(ann.created_at).toLocaleDateString()}</span>
                       <span className={`text-[9px] px-2.5 py-1 rounded font-black tracking-widest uppercase ${ann.priority_level === 'EMERGENCY' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>{ann.priority_level}</span>
                     </div>
-                    <div className="flex-1 mb-6">
+
+                    <div className="flex-1 mb-4">
                       <h4 className="text-lg font-black text-slate-800 leading-tight mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors">{ann.title}</h4>
                       <p className="text-sm text-slate-500 font-medium line-clamp-2">{ann.description}</p>
                     </div>
-                    <div className="pt-4 mt-auto border-t border-slate-50 flex items-center justify-between">
+
+                    {/* Audience info strip */}
+                    <div className="bg-slate-50 rounded-xl px-3 py-2 mb-4 flex items-center gap-2 border border-slate-100">
+                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                        <Users size={13} className="text-indigo-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-slate-800 truncate">
+                          {ann.target_role === 'PROCTORED_STUDENTS' ? 'My Proctored Students' :
+                            ann.target_role === 'ALL' ? 'Everyone' :
+                            `${ann.target_role} · ${ann.target_dept || 'ALL'}`}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                          {ann.target_year ? `Year ${ann.target_year}` : 'All Years'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 mt-auto border-t border-slate-50 flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors"><Eye size={14} /><span className="text-sm font-black">{ann.total_views || 0} Views</span></div>
-                      {ann.attachments?.length > 0 && <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100 text-slate-500"><Paperclip size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">{ann.attachments.length} Attached</span></div>}
+                      <div className="flex items-center gap-1.5">
+                        {ann.target_role === 'PROCTORED_STUDENTS' && (
+                          <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-600 px-2 py-1.5 rounded-lg">
+                            <Send size={11} />
+                            <span className="text-[10px] font-black uppercase tracking-wider">Replies</span>
+                          </div>
+                        )}
+                        {ann.attachments?.length > 0 && <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100 text-slate-500"><Paperclip size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">{ann.attachments.length} Attached</span></div>}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -731,7 +791,7 @@ export default function StaffDashboard() {
       {selectedViewAnnouncement && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-6 bg-slate-900/60 backdrop-blur-md animate-fade-in"
-          onClick={() => setSelectedViewAnnouncement(null)}
+          onClick={() => { setSelectedViewAnnouncement(null); setAnnReplies([]); }}
         >
           <div
             className="bg-white rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] animate-scale-in flex flex-col max-h-[95vh] md:max-h-[90vh]"
@@ -762,7 +822,18 @@ export default function StaffDashboard() {
 
             {/* Body */}
             <div className="p-6 md:p-8 overflow-y-auto flex-1 bg-slate-50/50 no-scrollbar space-y-5">
-              {/* Meta */}
+              {/* Poster identity card */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center shrink-0">
+                  <User size={22} className="text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-black text-slate-800 truncate">{selectedViewAnnouncement.posted_by_name || selectedViewAnnouncement.posted_by}</p>
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{selectedViewAnnouncement.posted_role} · ID: {selectedViewAnnouncement.posted_by}</p>
+                </div>
+              </div>
+
+              {/* Audience meta */}
               <div className="grid grid-cols-3 gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                 <div className="text-center border-r border-slate-100">
                   <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1"><MapIcon size={12} className="inline mr-1" />Dept</span>
@@ -836,11 +907,59 @@ export default function StaffDashboard() {
                   </div>
                 </div>
               )}
-            </div>
+                {/* ── STUDENT REPLIES PANEL (proctor's proctored announcements only) ── */}
+                {selectedViewAnnouncement.target_role === 'PROCTORED_STUDENTS' && (
+                  <div className="border-t border-slate-100 bg-white">
+                    <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100">
+                      <Send size={14} className="text-indigo-500" />
+                      <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest">Student Replies</h4>
+                      {annRepliesLoading && <Loader2 size={13} className="animate-spin text-indigo-400 ml-2" />}
+                      <span className="ml-auto bg-indigo-100 text-indigo-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest">
+                        {annReplies.length} {annReplies.length === 1 ? 'Reply' : 'Replies'}
+                      </span>
+                    </div>
+
+                    <div className="overflow-y-auto max-h-72 no-scrollbar">
+                      {annRepliesLoading ? (
+                        <div className="p-8 flex justify-center">
+                          <Loader2 size={28} className="animate-spin text-indigo-300" />
+                        </div>
+                      ) : annReplies.length === 0 ? (
+                        <div className="p-8 text-center">
+                          <p className="text-slate-400 font-medium text-sm">No student replies yet.</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-50">
+                          {annReplies.map((r) => (
+                            <div key={r.reply_id} className="flex gap-4 px-6 py-4 hover:bg-slate-50/60 transition-colors">
+                              {/* Avatar */}
+                              <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0 text-indigo-700 font-black text-sm">
+                                {(r.student_name || r.student_roll_no).charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className="text-sm font-black text-slate-800">{r.student_name}</span>
+                                  <span className="text-[10px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded uppercase tracking-widest">
+                                    {r.student_roll_no}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-slate-600 font-medium whitespace-pre-wrap">{r.message}</p>
+                                <p className="text-[10px] text-slate-400 font-semibold mt-1 uppercase tracking-wider">
+                                  {new Date(r.created_at).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
             {/* Footer */}
             <div className="p-5 border-t border-slate-100 bg-white shrink-0 flex justify-end">
-              <button onClick={() => setSelectedViewAnnouncement(null)} className="px-8 py-3 rounded-xl font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors text-sm uppercase tracking-widest">
+              <button onClick={() => { setSelectedViewAnnouncement(null); setAnnReplies([]); }} className="px-8 py-3 rounded-xl font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors text-sm uppercase tracking-widest">
                 Close
               </button>
             </div>

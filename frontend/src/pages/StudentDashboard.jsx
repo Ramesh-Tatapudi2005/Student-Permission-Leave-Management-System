@@ -44,6 +44,11 @@ export default function StudentDashboard() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [emergencyAlert, setEmergencyAlert] = useState(null);
   const [selectedViewAnnouncement, setSelectedViewAnnouncement] = useState(null);
+  // Reply states for proctored announcements
+  const [replyText, setReplyText] = useState('');
+  const [isReplying, setIsReplying] = useState(false);
+  const [myReplies, setMyReplies] = useState([]);   // replies this student has already sent
+  const [repliesLoading, setRepliesLoading] = useState(false);
 
   // --- APPLICATION STATES ---
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -256,14 +261,13 @@ export default function StudentDashboard() {
     }
 
     // ── File validations ──
-    if (!parentLetter) {
-      notify("Please attach your proof for permission (PDF).", "error"); return;
-    }
-    if (parentLetter.type !== "application/pdf") {
-      notify("Only PDF files are accepted for the proof permission pdf.", "error"); return;
-    }
-    if (parentLetter.size > 5 * 1024 * 1024) {
-      notify("Proof pdf must not exceed 5 MB.", "error"); return;
+    if (parentLetter) {
+      if (parentLetter.type !== "application/pdf") {
+        notify("Only PDF files are accepted for the proof permission pdf.", "error"); return;
+      }
+      if (parentLetter.size > 5 * 1024 * 1024) {
+        notify("Proof pdf must not exceed 5 MB.", "error"); return;
+      }
     }
     // ─────────────────────────────────────────────────────────────────────
 
@@ -275,7 +279,9 @@ export default function StudentDashboard() {
       formData.append('description', description);
       formData.append('from_date', newApp.from_date);
       formData.append('to_date', newApp.to_date);
-      formData.append('parent_letter', parentLetter);
+      if (parentLetter) {
+        formData.append('parent_letter', parentLetter);
+      }
       await dashboardAPI.applyPermission(formData);
       setShowApplyModal(false);
       setNewApp({ leave_type: 'Leave', subject: '', description: '', from_date: '', to_date: '' });
@@ -739,19 +745,29 @@ export default function StudentDashboard() {
                       'bg-[#0C3669]/40'}`}>
                   </div>
 
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                      From: {ann.posted_role}
+                  {/* Card top: priority badge + date */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className={`text-[9px] px-2.5 py-1 rounded-full font-black tracking-widest uppercase
+                      ${ann.priority_level === 'EMERGENCY' ? 'bg-rose-100 text-rose-600' :
+                        ann.priority_level === 'HIGH' ? 'bg-amber-100 text-amber-600' :
+                        'bg-slate-100 text-slate-500'}`}>
+                      {ann.priority_level !== 'STANDARD' ? ann.priority_level : 'STANDARD'}
                     </span>
-                    <span className={`text-[9px] px-2.5 py-1 rounded font-black tracking-widest uppercase
-                      ${ann.priority_level === 'EMERGENCY' ? 'bg-rose-100 text-rose-600' : 
-                        ann.priority_level === 'HIGH' ? 'bg-amber-100 text-amber-600' : 
-                        'text-slate-400'}`}>
-                      {ann.priority_level !== 'STANDARD' ? ann.priority_level : new Date(ann.created_at).toLocaleDateString()}
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      {new Date(ann.created_at).toLocaleDateString()}
                     </span>
                   </div>
 
-                  <div className="flex-1 mb-6">
+                  {/* Proctor badge (only when applicable) */}
+                  {ann.is_from_proctor && (
+                    <div className="flex items-center gap-1.5 mb-3 bg-indigo-50 border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-lg w-fit">
+                      <Users size={11} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Your Proctor</span>
+                    </div>
+                  )}
+
+                  {/* Title & description */}
+                  <div className="flex-1 mb-4">
                     <h4 className="text-lg font-black text-slate-800 leading-tight mb-2 line-clamp-2 group-hover:text-[#0C3669] transition-colors">
                       {ann.title}
                     </h4>
@@ -760,11 +776,21 @@ export default function StudentDashboard() {
                     </p>
                   </div>
 
-                  <div className="pt-4 mt-auto border-t border-slate-100 flex items-center justify-between">
+                  {/* Faculty info strip */}
+                  <div className="bg-slate-50 rounded-xl px-3 py-2 mb-4 flex items-center gap-2 border border-slate-100">
+                    <div className="w-7 h-7 rounded-full bg-[#0C3669]/10 flex items-center justify-center shrink-0">
+                      <User size={13} className="text-[#0C3669]" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-black text-slate-800 truncate">{ann.posted_by_name || ann.posted_by}</p>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{ann.posted_role} · {ann.posted_by}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 mt-auto border-t border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-[#F58220] group-hover:text-orange-600 flex items-center gap-1 transition-colors">
                       <Eye size={14} /> Read More
                     </span>
-                    
                     {ann.attachments?.length > 0 && (
                       <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100 text-slate-500">
                         <Paperclip size={12} />
@@ -1165,8 +1191,8 @@ export default function StudentDashboard() {
 
                     {/* PARENT'S HANDWRITTEN LETTER UPLOAD */}
                     <div>
-                      <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">Proof for permission (PDF) <span className="text-rose-500">*</span></label>
-                      <p className="text-[11px] text-slate-400 font-medium mb-3">Upload a scanned/photographed PDF of the proof for the permission.</p>
+                      <label className="text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest mb-2 block">Proof for permission (PDF) <span className="text-slate-300 font-normal normal-case tracking-normal ml-1">(Optional)</span></label>
+                      <p className="text-[11px] text-slate-400 font-medium mb-3">Optionally upload a scanned/photographed PDF of the proof for the permission.</p>
                       <div 
                         className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer group hover:border-[#0C3669]/40 hover:bg-[#0C3669]/5 ${
                           parentLetter ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'
@@ -1344,6 +1370,11 @@ export default function StudentDashboard() {
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-200">
                         From {selectedViewAnnouncement.posted_role}
                       </span>
+                      {selectedViewAnnouncement.is_from_proctor && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-indigo-400/30 text-indigo-100 flex items-center gap-1">
+                          <Users size={10} /> Your Proctor
+                        </span>
+                      )}
                     </div>
                     <h2 className="text-2xl md:text-3xl font-black tracking-tight leading-tight mb-2">
                       {selectedViewAnnouncement.title}
@@ -1359,19 +1390,31 @@ export default function StudentDashboard() {
 
                 {/* Body */}
                 <div className="p-6 md:p-8 overflow-y-auto flex-1 bg-slate-50/50 no-scrollbar space-y-5">
-                  {/* Meta */}
-                  <div className="grid grid-cols-2 gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                    <div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Posted By</span>
-                      <span className="text-sm font-bold text-slate-800">{selectedViewAnnouncement.posted_by}</span>
+                  {/* Faculty identity card */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-[#0c3669]/10 flex items-center justify-center shrink-0">
+                      <User size={22} className="text-[#0c3669]" />
                     </div>
-                    <div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Audience</span>
-                      <span className="text-sm font-bold text-slate-800">
-                        {selectedViewAnnouncement.target_dept || 'ALL'}
-                        {selectedViewAnnouncement.target_year ? ` · Year ${selectedViewAnnouncement.target_year}` : ''}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-black text-slate-800 truncate">{selectedViewAnnouncement.posted_by_name || selectedViewAnnouncement.posted_by}</p>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{selectedViewAnnouncement.posted_role} · ID: {selectedViewAnnouncement.posted_by}</p>
+                    </div>
+                    {selectedViewAnnouncement.is_from_proctor && (
+                      <span className="shrink-0 flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg">
+                        <Users size={12} /> Your Proctor
                       </span>
-                    </div>
+                    )}
+                  </div>
+
+                  {/* Meta: audience */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Audience</span>
+                    <span className="text-sm font-bold text-slate-800">
+                      {selectedViewAnnouncement.target_role === 'PROCTORED_STUDENTS'
+                        ? 'Your Proctor\'s Students'
+                        : `${selectedViewAnnouncement.target_dept || 'ALL DEPARTMENTS'}${selectedViewAnnouncement.target_year ? ` · Year ${selectedViewAnnouncement.target_year}` : ''}`
+                      }
+                    </span>
                   </div>
 
                   {/* Description */}
@@ -1432,11 +1475,73 @@ export default function StudentDashboard() {
                       </div>
                     </div>
                   )}
+
+                  {/* ── REPLY SECTION (only for proctored announcements) ── */}
+                  {selectedViewAnnouncement.is_from_proctor && (
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-2xl overflow-hidden">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 px-5 py-3 bg-indigo-100 border-b border-indigo-200">
+                        <Send size={13} className="text-indigo-600" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">Reply to your Proctor</span>
+                        {repliesLoading && <Loader2 size={12} className="animate-spin text-indigo-400 ml-auto" />}
+                      </div>
+
+                      <div className="p-4 space-y-4">
+                        {/* Past replies */}
+                        {myReplies.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">Your previous replies</p>
+                            {myReplies.map((r) => (
+                              <div key={r.reply_id} className="bg-white rounded-xl px-4 py-3 border border-indigo-100 shadow-sm">
+                                <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">{r.message}</p>
+                                <p className="text-[10px] text-indigo-400 font-semibold mt-1 uppercase tracking-wider">
+                                  {new Date(r.created_at).toLocaleString()}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Compose */}
+                        <textarea
+                          rows={3}
+                          placeholder="Type your reply to your proctor…"
+                          className="w-full bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm font-medium text-slate-800 outline-none resize-none transition-all placeholder:text-slate-400"
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                        />
+                        <button
+                          disabled={isReplying || !replyText.trim()}
+                          onClick={async () => {
+                            if (!replyText.trim()) return;
+                            setIsReplying(true);
+                            try {
+                              const res = await dashboardAPI.postAnnouncementReply(
+                                selectedViewAnnouncement.announcement_id,
+                                { student_roll_no: profile.roll_no, message: replyText.trim() }
+                              );
+                              setMyReplies(prev => [...prev, res.data]);
+                              setReplyText('');
+                              notify('Reply sent to your proctor!', 'success');
+                            } catch (err) {
+                              notify(getApiError(err, 'Failed to send reply.'), 'error');
+                            } finally {
+                              setIsReplying(false);
+                            }
+                          }}
+                          className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-md shadow-indigo-500/20"
+                        >
+                          {isReplying ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                          {isReplying ? 'Sending…' : 'Send Reply'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer */}
                 <div className="p-5 border-t border-slate-100 bg-white shrink-0 flex justify-end">
-                  <button onClick={() => setSelectedViewAnnouncement(null)} className="px-8 py-3 rounded-xl font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors text-sm uppercase tracking-widest">
+                  <button onClick={() => { setSelectedViewAnnouncement(null); setReplyText(''); setMyReplies([]); }} className="px-8 py-3 rounded-xl font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors text-sm uppercase tracking-widest">
                     Close
                   </button>
                 </div>

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Request, UploadFile, File, Form
+from typing import Optional
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -54,17 +55,19 @@ async def apply_permission(
     description: str = Form(...),
     from_date: str = Form(...),
     to_date: str = Form(...),
-    parent_letter: UploadFile = File(...),
+    parent_letter: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db), 
     current_user = Depends(get_current_user)
 ):
-    # Validate the uploaded file
-    if parent_letter.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed for the parent's letter.")
-    
-    contents = await parent_letter.read()
-    if len(contents) > 5 * 1024 * 1024:  # 5 MB limit
-        raise HTTPException(status_code=400, detail="File size must not exceed 5 MB.")
+    unique_filename = None
+    if parent_letter:
+        # Validate the uploaded file
+        if parent_letter.content_type != "application/pdf":
+            raise HTTPException(status_code=400, detail="Only PDF files are allowed for the parent's letter.")
+        
+        contents = await parent_letter.read()
+        if len(contents) > 5 * 1024 * 1024:  # 5 MB limit
+            raise HTTPException(status_code=400, detail="File size must not exceed 5 MB.")
     
     # Validate form fields using the existing Pydantic schema.
     # NOTE: We catch ValidationError explicitly here because FastAPI only
@@ -99,11 +102,12 @@ async def apply_permission(
                 messages.append(msg)
         raise HTTPException(status_code=400, detail=" | ".join(messages) if messages else "Invalid application data.")
     
-    # Save the PDF file with a unique name
-    unique_filename = f"{current_user['sub']}_{uuid.uuid4().hex[:8]}_{parent_letter.filename}"
-    file_path = os.path.join(PARENT_LETTERS_DIR, unique_filename)
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    # Save the PDF file with a unique name if provided
+    if parent_letter:
+        unique_filename = f"{current_user['sub']}_{uuid.uuid4().hex[:8]}_{parent_letter.filename}"
+        file_path = os.path.join(PARENT_LETTERS_DIR, unique_filename)
+        with open(file_path, "wb") as f:
+            f.write(contents)
     
     return LeaveService.apply_leave(db, current_user["sub"], schema, attachment_filename=unique_filename)
 

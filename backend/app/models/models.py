@@ -63,3 +63,18 @@ class AnnouncementRead(Base):
     announcement_id = Column(Integer, ForeignKey("announcements.announcement_id"), nullable=False)
     user_identifier = Column(String, ForeignKey("auth_users.user_identifier"), nullable=False)
     read_at = Column(DateTime, server_default=func.now())
+
+
+class AnnouncementReply(Base):
+    """
+    Stores student replies to proctor announcements (target_role='PROCTORED_STUDENTS').
+    A student may send multiple replies to the same announcement.
+    The proctor can view all replies for their announcements.
+    """
+    __tablename__ = "announcement_replies"
+
+    reply_id = Column(Integer, primary_key=True, index=True)
+    announcement_id = Column(Integer, ForeignKey("announcements.announcement_id", ondelete="CASCADE"), nullable=False)
+    student_roll_no = Column(String(30), nullable=False)   # e.g. "21CS101"
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())

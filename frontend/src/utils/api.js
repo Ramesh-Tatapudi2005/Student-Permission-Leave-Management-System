@@ -93,6 +93,14 @@ export const dashboardAPI = {
   
   acknowledgeAnnouncement: (announcement_id, user_identifier) => 
     API.post(`/announcements/acknowledge?announcement_id=${announcement_id}&user_identifier=${user_identifier}`),
+
+  // Proctor Announcement Replies
+  postAnnouncementReply: (announcementId, data) =>
+    API.post(`/announcements/${announcementId}/reply`, data),
+  getAnnouncementReplies: (announcementId, empId) =>
+    API.get(`/announcements/${announcementId}/replies`, { params: { emp_id: empId } }),
+  getAnnouncementReplyCount: (announcementId) =>
+    API.get(`/announcements/${announcementId}/reply-count`),
 };
 
 // FIX 2 & 3: Created standalone adminAPI and used capital 'API'.

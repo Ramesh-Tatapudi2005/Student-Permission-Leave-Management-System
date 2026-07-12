@@ -61,7 +61,7 @@ export const dashboardAPI = {
   applyPermission: (formData) => API.post('/leaves/apply', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  viewParentLetter: (appId) => API.get(`/leaves/${appId}/attachment`, { responseType: 'blob' }),
+  viewParentLetter: (appId) => API.get(`/leaves/${appId}/attachment`),
   
   // Staff Endpoints (Faculty, HOD, Warden)
   getStaffProfile: () => API.get('/staff/profile'),

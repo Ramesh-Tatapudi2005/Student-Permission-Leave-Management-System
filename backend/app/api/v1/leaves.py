@@ -10,8 +10,9 @@ from app.core.security import get_current_user, decode_attachment_token  # JWT d
 from app.models.leave import LeaveApplication
 from app.models.user import Student
 from fastapi_limiter.depends import FastAPILimiter
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fpdf import FPDF
+from app.api.v1.announcements import supabase
 from datetime import date
 import os
 import uuid
@@ -102,12 +103,21 @@ async def apply_permission(
                 messages.append(msg)
         raise HTTPException(status_code=400, detail=" | ".join(messages) if messages else "Invalid application data.")
     
-    # Save the PDF file with a unique name if provided
+    # Save the PDF file to Supabase if provided
     if parent_letter:
-        unique_filename = f"{current_user['sub']}_{uuid.uuid4().hex[:8]}_{parent_letter.filename}"
-        file_path = os.path.join(PARENT_LETTERS_DIR, unique_filename)
-        with open(file_path, "wb") as f:
-            f.write(contents)
+        file_extension = parent_letter.filename.split(".")[-1] if "." in parent_letter.filename else "pdf"
+        unique_file_id = f"{current_user['sub']}_{uuid.uuid4().hex[:8]}.{file_extension}"
+        
+        try:
+            supabase.storage.from_("announcement_attachments").upload(
+                path=unique_file_id,
+                file=contents,
+                file_options={"content-type": parent_letter.content_type}
+            )
+            # Store the full public URL in the attachment_filename column
+            unique_filename = supabase.storage.from_("announcement_attachments").get_public_url(unique_file_id)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload to cloud storage: {str(e)}")
     
     return LeaveService.apply_leave(db, current_user["sub"], schema, attachment_filename=unique_filename)
 
@@ -133,15 +143,12 @@ def view_attachment_via_token(
     if not app.attachment_filename:
         raise HTTPException(status_code=404, detail="No parent letter was attached to this application.")
 
-    file_path = os.path.join(PARENT_LETTERS_DIR, app.attachment_filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+    # Validate that it's actually a URL (if it's an old local file from before the migration, this will break)
+    if not app.attachment_filename.startswith("http"):
+        raise HTTPException(status_code=400, detail="This old attachment is no longer available.")
 
-    return FileResponse(
-        path=file_path,
-        filename=f"Parent_Letter_APP_{app_id}.pdf",
-        media_type="application/pdf"
-    )
+    # Simply redirect them to the public Supabase URL
+    return RedirectResponse(url=app.attachment_filename)
 
 
 @router.get("/{app_id}/attachment")
@@ -157,15 +164,10 @@ def get_parent_letter_attachment(
     if not app.attachment_filename:
         raise HTTPException(status_code=404, detail="No parent letter attached to this application.")
     
-    file_path = os.path.join(PARENT_LETTERS_DIR, app.attachment_filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+    if not app.attachment_filename.startswith("http"):
+        raise HTTPException(status_code=400, detail="This old attachment is no longer available.")
     
-    return FileResponse(
-        path=file_path,
-        filename=f"Parent_Letter_APP_{app_id}.pdf",
-        media_type="application/pdf"
-    )
+    return {"url": app.attachment_filename}
 
 @router.get("/student/history")
 def get_student_history(

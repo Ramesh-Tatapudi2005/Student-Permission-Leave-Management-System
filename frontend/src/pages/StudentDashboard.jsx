@@ -368,8 +368,11 @@ export default function StudentDashboard() {
   const handleViewParentLetter = async (appId) => {
     try {
       const response = await dashboardAPI.viewParentLetter(appId);
-      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-      window.open(url, '_blank');
+      if (response.data && response.data.url) {
+        window.open(response.data.url, '_blank');
+      } else {
+        notify("Failed to open the attachment. Invalid URL.", "error");
+      }
     } catch (error) {
       notify("Failed to fetch proof pdf.", "error");
     }

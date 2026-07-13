@@ -1,12 +1,17 @@
 from celery import Celery
 
+import os
+
 # 1. Initialize Celery
-# We tell it to use RabbitMQ as the broker (message queue) 
-# and Redis as the backend (to store task success/failure states)
+# We read the broker and backend URLs from environment variables, 
+# defaulting to the local docker-compose URLs for local development.
+BROKER_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672//")
+BACKEND_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
 celery_app = Celery(
     "university_worker",
-    broker="amqp://guest:guest@rabbitmq:5672//",
-    backend="redis://redis:6379/0",
+    broker=BROKER_URL,
+    backend=BACKEND_URL,
     include=["app.workers.leave_tasks", "app.workers.announcement_tasks"]
 )
 

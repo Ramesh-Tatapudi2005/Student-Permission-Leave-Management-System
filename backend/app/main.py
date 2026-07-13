@@ -47,6 +47,10 @@ origins = [
     "http://127.0.0.1:5173",  # Alternate localhost mapping
 ]
 
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,    # Allows requests from the React app

@@ -13,10 +13,13 @@ from app.utils.redis_pubsub import redis_pubsub
 
 Base.metadata.create_all(bind=engine)
 
+import os
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Connects to Redis DB '1' so it doesn't conflict with your Dashboard queue cache (DB '0')
-    redis_connection = redis.from_url("redis://redis:6379/1", encoding="utf-8", decode_responses=True)
+    # Connects to the Redis DB using the environment variable
+    redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    redis_connection = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
     await FastAPILimiter.init(redis_connection)
     print("✅ Rate Limiter Initialized via Redis")
     

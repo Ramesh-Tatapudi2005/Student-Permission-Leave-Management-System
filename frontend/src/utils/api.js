@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Ensure this matches your FastAPI backend URL
-const API = axios.create({ baseURL: 'http://localhost:8000' });
+// Ensure this matches your FastAPI backend URL (now dynamic via .env)
+const API = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000' });
 
 /**
  * Parses an Axios error into a human-readable string.

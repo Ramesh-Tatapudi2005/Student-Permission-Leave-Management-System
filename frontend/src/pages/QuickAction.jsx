@@ -20,8 +20,9 @@ export default function QuickAction() {
 
     setStatus('loading');
     try {
-      // FIX: Changed URL to point to the correct /leaves router prefix
-      await axios.post('http://localhost:8000/leaves/quick-action', {
+      // FIX: Changed URL to point to the correct /leaves router prefix dynamically
+      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      await axios.post(`${baseURL}/leaves/quick-action`, {
         token: token,
         action: action,
         remarks: remarks || `Action processed via Secure Email Link.`

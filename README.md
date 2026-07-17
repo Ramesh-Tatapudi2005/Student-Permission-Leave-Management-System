@@ -52,7 +52,6 @@ This project aligns with the United Nations Sustainable Development Goals (SDGs)
 - **SDG 4 (Quality Education):** Reduces administrative friction, giving faculty more time for teaching and providing students with faster responses.
 - **SDG 9 (Industry, Innovation & Infrastructure):** Replaces paper-based processes with a scalable, modern digital infrastructure.
 - **SDG 16 (Peace, Justice & Strong Institutions):** Enforces accountability through audit trails and structured multi-stage approval workflows.
-- **SDG 17 (Partnerships for the Goals):** Bridges all university stakeholders through a unified collaborative platform.
 
 ## 🚀 Getting Started
 
